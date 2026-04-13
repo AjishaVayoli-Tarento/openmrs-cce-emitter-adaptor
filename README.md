@@ -1,0 +1,1 @@
+# openmrs-cce-emitter-adaptor
