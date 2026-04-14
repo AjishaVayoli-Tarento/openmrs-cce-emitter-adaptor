@@ -181,7 +181,7 @@ src/test/java/org/openphc/cce/emitter/
 |-----------|-------------|
 | **Polling-Based** | Polls OpenMRS on a configurable schedule; no webhook dependency |
 | **FHIR-Only Strategy** | All resource types polled via FHIR R4 API with `_lastUpdated` |
-| **Checkpoint Persistence** | Configurable checkpoint store (file or database) survives restarts |
+| **Checkpoint Persistence** | File-based checkpoint store (`checkpoints.json`) survives restarts; database-backed store planned as future enhancement |
 | **Sliding Window Seed** | On first boot or checkpoint loss, uses `now() - (intervalSeconds + overlapSeconds)` to avoid full-history fetch |
 | **At-Least-Once Delivery** | Overlap window may cause duplicates; downstream CCE handles idempotency |
 | **Single Responsibility** | Captures changes and forwards — no transformation |
@@ -367,3 +367,4 @@ flowchart LR
 
 - **Delete/Void Reconciliation** — REST API with `includeAll=true` to detect voided records invisible via FHIR
 - **ProgramEnrollment Polling** — REST API polling for ProgramEnrollments (`/ws/rest/v1/programenrollment`) if required. The FHIR `EpisodeOfCare` endpoint currently supports read-only by UUID without search/`_lastUpdated` support.
+- **Database-Backed Checkpoint Store** — Replace file-based checkpoint persistence with a database (e.g., PostgreSQL, H2) for multi-instance deployments and operational resilience

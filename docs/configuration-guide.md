@@ -74,7 +74,7 @@
 
 | Property | Env Var | Default | Description |
 |----------|---------|---------|-------------|
-| `emitter.checkpoint.store-type` | `CHECKPOINT_STORE_TYPE` | `file` | `file` or `database` |
+| `emitter.checkpoint.store-type` | `CHECKPOINT_STORE_TYPE` | `file` | `file` (database planned as future enhancement) |
 | `emitter.checkpoint.file-path` | `CHECKPOINT_FILE_PATH` | `./data/checkpoints.json` | File path (when `store-type=file`) |
 
 ---
