@@ -1,0 +1,94 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: openmrs-cce-emitter-adaptor
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
+
+emitter:
+  openmrs:
+    name: "${OPENMRS_NAME:openmrs}"
+    base-url: "${OPENMRS_BASE_URL:http://localhost:8080/openmrs}"
+    fhir-path: "${OPENMRS_FHIR_PATH:/ws/fhir2/R4}"
+    auth:
+      type: "${OPENMRS_AUTH_TYPE:basic}"
+      username: "${OPENMRS_AUTH_USERNAME:admin}"
+      password: "${OPENMRS_AUTH_PASSWORD:Admin123}"
+      token: "${OPENMRS_AUTH_TOKEN:}"
+      oauth2:
+        token-url: "${OPENMRS_AUTH_OAUTH2_TOKEN_URL:}"
+        client-id: "${OPENMRS_AUTH_OAUTH2_CLIENT_ID:}"
+        client-secret: "${OPENMRS_AUTH_OAUTH2_CLIENT_SECRET:}"
+        scope: "${OPENMRS_AUTH_OAUTH2_SCOPE:}"
+
+  openhim:
+    name: "${OPENHIM_NAME:openhim}"
+    base-url: "${OPENHIM_BASE_URL:http://localhost:5001/fhir}"
+    auth:
+      type: "${OPENHIM_AUTH_TYPE:basic}"
+      username: "${OPENHIM_AUTH_USERNAME:}"
+      password: "${OPENHIM_AUTH_PASSWORD:}"
+      token: "${OPENHIM_AUTH_TOKEN:}"
+    ssl-trust-all: ${OPENHIM_SSL_TRUST_ALL:false}
+    append-resource-type: ${OPENHIM_APPEND_RESOURCE_TYPE:true}
+    retry:
+      max-attempts: ${OPENHIM_RETRY_MAX_ATTEMPTS:3}
+      backoff-ms: ${OPENHIM_RETRY_BACKOFF_MS:2000}
+
+  polling:
+    fhir:
+      enabled: ${POLLING_FHIR_ENABLED:true}
+      interval-seconds: ${POLLING_FHIR_INTERVAL_SECONDS:30}
+      page-size: ${POLLING_FHIR_PAGE_SIZE:50}
+      overlap-seconds: ${POLLING_FHIR_OVERLAP_SECONDS:5}
+      follow-prior-order: ${POLLING_FHIR_FOLLOW_PRIOR_ORDER:true}
+      resource-types: ${POLLING_FHIR_RESOURCE_TYPES:Patient,RelatedPerson,Encounter,Observation,Condition,ServiceRequest}
+
+  checkpoint:
+    store-type: "${CHECKPOINT_STORE_TYPE:file}"
+    file-path: "${CHECKPOINT_FILE_PATH:./data/checkpoints.json}"
+
+  patient:
+    national-id:
+      enabled: ${PATIENT_NATIONAL_ID_ENABLED:true}
+      system: "${PATIENT_NATIONAL_ID_SYSTEM:http://moh.gov.rw/fhir/identifier/national-id}"
+      code: "${PATIENT_NATIONAL_ID_CODE:national-id}"
+      cache-ttl-seconds: ${PATIENT_NATIONAL_ID_CACHE_TTL_SECONDS:3600}
+      cache-max-size: ${PATIENT_NATIONAL_ID_CACHE_MAX_SIZE:10000}
+      on-missing: "${PATIENT_NATIONAL_ID_ON_MISSING:skip}"
+
+  referral:
+    response:
+      enabled: ${REFERRAL_RESPONSE_ENABLED:true}
+      order-type-name: "${REFERRAL_RESPONSE_ORDER_TYPE_NAME:Referral}"
+      category-system: "${REFERRAL_RESPONSE_CATEGORY_SYSTEM:http://cce.openphc.org/CodeSystem/event-type}"
+      category-code: "${REFERRAL_RESPONSE_CATEGORY_CODE:referral-response}"
+      category-display: "${REFERRAL_RESPONSE_CATEGORY_DISPLAY:Referral Response}"
+      based-on-identifier-system: "${REFERRAL_RESPONSE_BASED_ON_SYSTEM:http://mdtlabs.com/service-request-id}"
+      flip-intent: ${REFERRAL_RESPONSE_FLIP_INTENT:false}
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    org.openphc.cce: ${LOG_LEVEL_APP:INFO}
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:INFO}
+    ca.uhn.fhir: ${LOG_LEVEL_FHIR:INFO}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_INCLUDE:health,info,prometheus,metrics}
+  endpoint:
+    health:
+      show-details: ${HEALTH_SHOW_DETAILS:when-authorized}
+      probes:
+        enabled: ${HEALTH_PROBES_ENABLED:true}
+  metrics:
+    tags:
+      application: ${spring.application.name}
