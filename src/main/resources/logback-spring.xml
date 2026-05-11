@@ -10,10 +10,14 @@
         </encoder>
     </appender>
 
+    <!-- Default root — always attaches CONSOLE so logging works even when no
+         profile (or an unrecognised one like `prod`) is active. Profile blocks
+         below only override the level. -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
     <springProfile name="local | default">
-        <root level="INFO">
-            <appender-ref ref="CONSOLE"/>
-        </root>
         <logger name="org.openphc.cce" level="DEBUG"/>
     </springProfile>
 
@@ -23,7 +27,7 @@
         </root>
     </springProfile>
 
-    <springProfile name="production">
+    <springProfile name="production | prod">
         <root level="WARN">
             <appender-ref ref="CONSOLE"/>
         </root>
