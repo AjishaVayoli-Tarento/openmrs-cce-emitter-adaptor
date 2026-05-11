@@ -46,8 +46,13 @@ OpenMRS Instance ──(FHIR R4 API)──► ★ OpenMRS Emitter Adaptor ★
 | Component | Description |
 |-----------|-------------|
 | `FhirPollerService` | `@Scheduled` — polls FHIR API using `_lastUpdated` |
-| `ForwardingEngine` | Forwards to OpenHIM with retry and auth |
-| `CheckpointStore` | Persists poll timestamps (file-based) |
+| `ForwardingEngine` | Forwards to OpenHIM with retry, auth, and short-circuit on non-retriable 4xx |
+| `CheckpointStore` | Persists poll timestamps (file-based); bumps saved checkpoint by +1s to work around OpenMRS fhir2 `gt` second-boundary inclusivity |
+| `OrderRevisionResolver` | Suppresses OpenMRS discontinue tombstones (`status=stopped|revoked` rows that are pure revisions of an active order) and optionally re-emits the prior order |
+| `OrderIdentifierEnricher` | (a) Re-injects the OpenMRS `accessionNumber` (stripped by fhir2) as an `identifier[]` entry on outgoing `ServiceRequest` / `MedicationRequest`. (b) When the order's `orderType.display` matches the configured referral name (default `Referral`) and `status` is `completed` or `revoked`, classifies the resource as a **referral response** by adding a `category` coding, populating `basedOn` with a logical reference to the placer's ServiceRequest id (sourced from `accessionNumber`), and optionally flipping `intent` to `filler-order` |
+| `PatientReferenceRewriter` | Rewrites `Patient/{uuid}` references to `Patient/{national-id}` on every outgoing resource |
+| `NationalIdResolver` | Resolves OpenMRS Patient UUID → `national-id` via the FHIR Patient API, with in-memory TTL cache |
+| `AuthService` | Centralizes Basic / Bearer / OAuth2 / JWT / custom-token auth header construction for OpenMRS and OpenHIM |
 | `EmitterProperties` | `@ConfigurationProperties` — type-safe config |
 
 ## Project Structure
@@ -58,13 +63,20 @@ src/main/java/org/openphc/cce/emitter/
 ├── config/
 │   ├── EmitterProperties.java
 │   ├── FhirConfig.java
+│   ├── LoggingFilter.java
+│   ├── ObservabilityConfig.java
 │   ├── RestClientConfig.java
 │   └── SchedulingConfig.java
 ├── service/
+│   ├── AuthService.java
 │   ├── CheckpointStore.java
 │   ├── FhirPollerService.java
 │   ├── ForwardingEngine.java
-│   └── ForwardResult.java
+│   ├── ForwardResult.java
+│   ├── NationalIdResolver.java
+│   ├── OrderIdentifierEnricher.java
+│   ├── OrderRevisionResolver.java
+│   └── PatientReferenceRewriter.java
 └── model/
     └── PollCheckpoint.java
 ```
@@ -78,7 +90,6 @@ src/main/java/org/openphc/cce/emitter/
 | [Deployment Guide](docs/deployment-guide.md) | Build, Docker, checklist |
 | [API Reference](docs/api-reference.md) | Actuator endpoints, metrics, consumed APIs |
 | [Operations Runbook](docs/operations-runbook.md) | Troubleshooting, alerts, monitoring |
-| [OpenMRS REST vs FHIR](docs/openmrs-rest-vs-fhir-comparison.md) | API comparison and selection rationale |
 
 ## Key Environment Variables
 

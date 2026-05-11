@@ -1,0 +1,13 @@
+emitter:
+  openhim:
+    ssl-trust-all: true
+
+logging:
+  level:
+    root: INFO
+    org.openphc.cce: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always

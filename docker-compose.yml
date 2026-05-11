@@ -1,0 +1,48 @@
+services:
+  openmrs-cce-emitter-adaptor:
+    build: .
+    image: openmrs-cce-emitter-adaptor:latest
+    container_name: openmrs-cce-emitter-adaptor
+    ports:
+      - "8085:8085"
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      SERVER_PORT: 8085
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx512m -XX:+UseG1GC"
+      LOG_LEVEL_APP: DEBUG
+      POLLING_FHIR_OVERLAP_SECONDS: "0"
+      # OpenMRS (O3 reference app) — reached via the o3 gateway container
+      OPENMRS_BASE_URL: http://o3-gateway-1:80/openmrs
+      OPENMRS_FHIR_PATH: /ws/fhir2/R4
+      OPENMRS_AUTH_TYPE: basic
+      OPENMRS_AUTH_USERNAME: admin
+      OPENMRS_AUTH_PASSWORD: Admin123
+      # OpenHIM core — same container the FHIR emitter forwards to
+      OPENHIM_BASE_URL: http://cce-openhim-core:5001/openmrs/fhir
+      OPENHIM_AUTH_TYPE: basic
+      OPENHIM_AUTH_USERNAME: openmrs-fhir-client
+      OPENHIM_AUTH_PASSWORD: password
+      OPENHIM_SSL_TRUST_ALL: "false"
+      CHECKPOINT_FILE_PATH: /app/data/checkpoints.json
+      PATIENT_NATIONAL_ID_ENABLED: "true"
+    networks:
+      - default
+      - o3
+      - openhim
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health/liveness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  default:
+  o3:
+    external: true
+    name: o3_default
+  openhim:
+    external: true
+    name: openhim-cce-emitter-adaptor_default

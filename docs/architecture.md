@@ -36,24 +36,33 @@ The **OpenMRS CCE Emitter Adaptor** polls OpenMRS APIs for resource changes and 
 │  │  │  @Scheduled 30s                                           │  │  │
 │  │  │  _lastUpdated polling                                     │  │  │
 │  │  │  FHIR Bundle pagination                                   │  │  │
-│  │  │  14 resource types (Patient, Encounter, Observation, ...) │  │  │
+  │  │  Configurable resource types                              │  │  │
+  │  │  (Patient, RelatedPerson, Encounter, Observation,         │  │  │
+  │  │   Condition, ServiceRequest by default)                   │  │  │
 │  │  └───────────────────────────────────────────────────────────┘  │  │
 │  └──────────────────────────────┬──────────────────────────────────┘  │
 │                                 │                                     │
 │                                 ▼                                     │
 │  ┌─────────────────────────────────────────────────────────────────┐  │
 │  │                      Forwarding Layer                           │  │
-│  │  ForwardingEngine                                               │  │
-│  │  • Build target URL (baseUrl + /ResourceType)                   │  │
-│  │  • Attach OpenHIM auth (Basic / JWT / Token)                    │  │
-│  │  • POST FHIR JSON with retry + linear backoff                   │  │
-│  │  • Return ForwardResult → increment metrics                     │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │                       Support Layer                             │  │
-│  │  CheckpointStore (file / database)  │  EmitterProperties        │  │
-│  │  FhirConfig  │  RestClientConfig    │  SchedulingConfig         │  │
+  │  │  OrderRevisionResolver  → suppress discontinue tombstones       │  │
+  │  │  OrderIdentifierEnricher → inject OpenMRS accessionNumber       │  │
+  │  │                            + referral-response classification    │  │
+  │  │  PatientReferenceRewriter (+ NationalIdResolver) → swap         │  │
+  │  │     Patient/{uuid} → Patient/{national-id}                      │  │
+  │  │  ForwardingEngine                                               │  │
+  │  │  • Build target URL (baseUrl + /ResourceType)                   │  │
+  │  │  • Attach OpenHIM auth via AuthService                          │  │
+  │  │  • POST FHIR JSON with retry + linear backoff                   │  │
+  │  │  • Short-circuit retries on non-retriable 4xx (≠ 408, 429)      │  │
+  │  │  • Return ForwardResult → increment metrics                     │  │
+  │  └─────────────────────────────────────────────────────────────────┘  │
+  │                                                                       │
+  │  ┌─────────────────────────────────────────────────────────────────┐  │
+  │  │                       Support Layer                             │  │
+  │  │  CheckpointStore (file)        │  AuthService                   │  │
+  │  │  EmitterProperties             │  LoggingFilter (MDC)           │  │
+  │  │  FhirConfig │ RestClientConfig │ SchedulingConfig │ Observability│  │
 │  └─────────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────┘
 ```
@@ -111,10 +120,15 @@ src/main/java/org/openphc/cce/emitter/
 │   ├── RestClientConfig.java                     # Standard + trust-all RestTemplate beans
 │   └── SchedulingConfig.java                     # @EnableScheduling + thread pool
 ├── service/
-│   ├── CheckpointStore.java                      # Persists poll checkpoints (file-based)
+│   ├── AuthService.java                          # Builds auth headers (Basic/Bearer/OAuth2/JWT/Custom)
+│   ├── CheckpointStore.java                      # Persists poll checkpoints (file); +1s bump on save
 │   ├── FhirPollerService.java                    # @Scheduled FHIR polling with _lastUpdated
 │   ├── ForwardingEngine.java                     # Synchronous forwarding to OpenHIM with retry
-│   └── ForwardResult.java                        # Forwarding outcome record
+│   ├── ForwardResult.java                        # Forwarding outcome record
+│   ├── NationalIdResolver.java                   # OpenMRS Patient UUID → national-id (cached)
+│   ├── OrderIdentifierEnricher.java              # Re-inject OpenMRS accessionNumber as identifier; classify referral responses (category + basedOn)
+│   ├── OrderRevisionResolver.java                # Suppress discontinue tombstones, follow priorOrder
+│   └── PatientReferenceRewriter.java             # Rewrite Patient references to use national-id
 └── model/
     └── PollCheckpoint.java                       # Checkpoint data (resourceType, lastUpdated)
 ```
@@ -122,7 +136,7 @@ src/main/java/org/openphc/cce/emitter/
 | Package | Files | Responsibility |
 |---------|-------|----------------|
 | `config` | 6 | Configuration properties, FHIR context, REST clients, scheduling, observability |
-| `service` | 4 | FHIR polling, forwarding engine, checkpoint persistence |
+| `service` | 9 | FHIR polling, order revision/identifier handling, patient reference rewriting, forwarding, checkpoint persistence, auth |
 | `model` | 1 | Checkpoint data record |
 
 ### 5.2 Test Structure
@@ -186,9 +200,10 @@ src/test/java/org/openphc/cce/emitter/
 | **At-Least-Once Delivery** | Overlap window may cause duplicates; downstream CCE handles idempotency |
 | **Single Responsibility** | Captures changes and forwards — no transformation |
 | **Fail-Safe Polling** | Individual poll failures logged, do not stop subsequent polls |
-| **Overlap Window** | 5-second overlap on `_lastUpdated` mitigates timing inconsistencies |
-| **Deduplication** | In-memory dedup within each poll cycle |
-| **Retry with Backoff** | Failed forwards retried with linear backoff |
+| **Overlap Window** | Configurable overlap on `_lastUpdated` mitigates timing inconsistencies (default `0` in this demo because `gt` is inclusive at the second boundary; see below) |
+| **Checkpoint +1s bump** | OpenMRS fhir2 treats `_lastUpdated=gt{T}` as inclusive at the second boundary (sub-seconds truncated). On save, the checkpoint is advanced by +1 second so the next poll excludes already-seen rows. |
+| **Deduplication** | In-memory dedup within each poll cycle (resourceType + id) |
+| **Retry with Backoff** | Failed forwards retried with linear backoff; **non-retriable 4xx** responses (everything except 408 and 429) short-circuit immediately. |
 
 ---
 
@@ -347,11 +362,41 @@ flowchart LR
 
 ---
 
+## 10.3 Order Revision Handling
+
+OpenMRS Orders are append-only: any revise/discontinue operation creates a new row whose `priorOrder` points to the original. The fhir2 module exposes these as separate `ServiceRequest` / `MedicationRequest` resources.
+
+`OrderRevisionResolver` runs per emitted order and:
+
+1. Reads the resource's `basedOn` / `priorPrescription` reference. If absent → forward as-is.
+2. If the new revision's `status` is `revoked`, `cancelled`, `entered-in-error`, or `stopped` (a **discontinue tombstone**), skip forwarding the tombstone and (when `emitter.polling.fhir.follow-prior-order=true`) re-fetch and forward the prior order so downstream sees the latest non-tombstone state.
+3. Otherwise (status update revision), forward the new revision as-is.
+
+## 10.4 Order Identifier Enrichment & Referral-Response Classification
+
+The fhir2 module strips OpenMRS-specific order metadata (`orderNumber`, `accessionNumber`) from outgoing `ServiceRequest` / `MedicationRequest` resources. `OrderIdentifierEnricher` fetches `/ws/rest/v1/order/{uuid}?v=custom:(uuid,accessionNumber,orderType:(uuid,display))` and merges the accession number into `identifier[]` with HL7 v2-0203 type code `ACSN` and system `urn:openmrs:accession-number`. Lookups are cached in-memory (TTL configurable; default 1h).
+
+### Referral-response classification
+
+When `emitter.referral.response.enabled=true` (default) AND the fetched `orderType.display` equals `emitter.referral.response.order-type-name` (default `Referral`) AND the resource `status` is `completed` or `revoked`, the same enricher additionally classifies the resource as a **referral response** so the downstream Compliance Service can match it via standard FHIR PlanDefinition expressions:
+
+1. **`category`** — adds a coding under a CCE-controlled CodeSystem (default `http://cce.openphc.org/CodeSystem/event-type` / code `referral-response`). PlanDefinition `action.trigger.data.codeFilter` (path `category`) can match this directly.
+2. **`basedOn`** — adds a logical `Reference.identifier` (`system` configurable, default `http://mdtlabs.com/service-request-id`; `value = accessionNumber`) so the Compliance Service can resolve back to the placer's original ServiceRequest. This relies on the placer system (e.g. SPICE) stamping its own `ServiceRequest.id` into the OpenMRS order's `accessionNumber` when posting the referral.
+3. **`intent`** — optionally flipped from `order` to `filler-order` (gated by `emitter.referral.response.flip-intent`, default `false` — enable only if the downstream PlanDefinition expects fulfiller-stage intent).
+
+All three operations are idempotent and only apply to `ServiceRequest`. `MedicationRequest` only receives ACSN enrichment.
+
+## 10.5 Patient Reference Rewriting
+
+`PatientReferenceRewriter` walks every outgoing resource and rewrites any `Patient/{openmrsUuid}` reference (in `subject`, `patient`, `beneficiary`, etc.) to `Patient/{national-id}`. The national-id is resolved by `NationalIdResolver` against the OpenMRS FHIR Patient API and cached. Behavior when a patient lacks a national-id is configurable via `emitter.patient.national-id.on-missing` (`skip` | `forward-as-is` | `fail`).
+
+---
+
 ## 11. What This Service Does NOT Do
 
 | Exclusion | Responsibility |
 |-----------|----------------|
-| Transform or enrich FHIR resources | Resources forwarded as-is — no mapping or enrichment |
+| Transform or enrich FHIR resources beyond the documented patient-reference rewrite and order-identifier enrichment | Resources are otherwise forwarded as-is |
 | Validate FHIR profile conformance | Only structural parse for metadata extraction |
 | Produce or consume Kafka events | HTTP-only forwarding; Kafka is downstream (CCE Collector) |
 | Wrap payloads in CloudEvents | CloudEvents wrapping happens in OpenHIM mediator |
