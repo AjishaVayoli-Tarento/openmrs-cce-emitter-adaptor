@@ -124,6 +124,38 @@ public class OrderIdentifierEnricher {
         if (cfg.isFlipIntent() && sr.getIntent() == ServiceRequest.ServiceRequestIntent.ORDER) {
             sr.setIntent(ServiceRequest.ServiceRequestIntent.FILLERORDER);
         }
+
+        // 4) Include full instructions text as orderDetail
+        addInstructionsOrderDetail(sr, refs, cfg);
+    }
+
+    /**
+     * Adds the full order instructions text as a coded {@code orderDetail} entry on the
+     * ServiceRequest so downstream consumers can read referral context directly.
+     */
+    private void addInstructionsOrderDetail(ServiceRequest sr, OrderRefs refs, ReferralResponseConfig cfg) {
+        if (!cfg.isIncludeInstructions()) return;
+        if (refs.instructions() == null || refs.instructions().isBlank()) return;
+
+        String system = cfg.getInstructionsSystem();
+        String code = cfg.getInstructionsCode();
+        String instructions = refs.instructions();
+
+        // Idempotency check — skip if an orderDetail with same system/code and text already exists
+        for (CodeableConcept cc : sr.getOrderDetail()) {
+            if (cc == null) continue;
+            for (Coding c : cc.getCoding()) {
+                if (system.equals(c.getSystem()) && code.equals(c.getCode())
+                        && instructions.equals(cc.getText())) {
+                    return;
+                }
+            }
+        }
+
+        sr.addOrderDetail(new CodeableConcept()
+                .addCoding(new Coding().setSystem(system).setCode(code).setDisplay(cfg.getInstructionsDisplay()))
+                .setText(instructions));
+        log.debug("Added referral instructions orderDetail to ServiceRequest/{}", sr.getIdPart());
     }
 
     private void addCategoryIfAbsent(ServiceRequest sr, String system, String code, String display) {
@@ -200,7 +232,7 @@ public class OrderIdentifierEnricher {
         OpenmrsConfig openmrs = properties.getOpenmrs();
         String url = stripTrailingSlash(openmrs.getBaseUrl())
                 + "/ws/rest/v1/order/" + orderUuid
-                + "?v=custom:(uuid,accessionNumber,orderType:(uuid,display))";
+                + "?v=custom:(uuid,accessionNumber,instructions,orderType:(uuid,display))";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
@@ -214,11 +246,12 @@ public class OrderIdentifierEnricher {
         if (body == null || body.isBlank()) return null;
         JsonNode node = objectMapper.readTree(body);
         String accessionNumber = textOrNull(node, "accessionNumber");
+        String instructions = textOrNull(node, "instructions");
         JsonNode orderTypeNode = node.get("orderType");
         String orderTypeName = orderTypeNode != null ? textOrNull(orderTypeNode, "display") : null;
         String orderTypeUuid = orderTypeNode != null ? textOrNull(orderTypeNode, "uuid") : null;
         if (accessionNumber == null && orderTypeName == null) return null;
-        return new OrderRefs(accessionNumber, orderTypeName, orderTypeUuid);
+        return new OrderRefs(accessionNumber, orderTypeName, orderTypeUuid, instructions);
     }
 
     private static String textOrNull(JsonNode node, String field) {
@@ -243,7 +276,8 @@ public class OrderIdentifierEnricher {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
-    private record OrderRefs(String accessionNumber, String orderTypeName, String orderTypeUuid) { }
+    private record OrderRefs(String accessionNumber, String orderTypeName, String orderTypeUuid,
+                               String instructions) { }
 
     private record CacheEntry(OrderRefs refs, Instant expiresAt) { }
 }

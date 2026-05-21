@@ -71,6 +71,10 @@ emitter:
       category-display: "${REFERRAL_RESPONSE_CATEGORY_DISPLAY:Referral Response}"
       based-on-identifier-system: "${REFERRAL_RESPONSE_BASED_ON_SYSTEM:http://mdtlabs.com/service-request-id}"
       flip-intent: ${REFERRAL_RESPONSE_FLIP_INTENT:false}
+      include-instructions: ${REFERRAL_RESPONSE_INCLUDE_INSTRUCTIONS:true}
+      instructions-system: "${REFERRAL_RESPONSE_INSTRUCTIONS_SYSTEM:http://cce.openphc.org/CodeSystem/referral-instructions}"
+      instructions-code: "${REFERRAL_RESPONSE_INSTRUCTIONS_CODE:referral-instructions}"
+      instructions-display: "${REFERRAL_RESPONSE_INSTRUCTIONS_DISPLAY:Referral Instructions}"
 
 logging:
   level:
