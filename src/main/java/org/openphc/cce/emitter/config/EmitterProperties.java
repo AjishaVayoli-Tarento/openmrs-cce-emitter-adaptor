@@ -181,5 +181,19 @@ public class EmitterProperties {
         private String basedOnIdentifierSystem = "http://mdtlabs.com/service-request-id";
         /** Flip {@code intent} from {@code order} to {@code filler-order}. */
         private boolean flipIntent = false;
+
+        /**
+         * When enabled, the full {@code instructions} text from the OpenMRS order
+         * is added as a coded {@code orderDetail} on the outgoing ServiceRequest.
+         * This lets downstream consumers read referral context (e.g. ANC visit info)
+         * directly from the resource.
+         */
+        private boolean includeInstructions = true;
+        /** CodeSystem for the instructions orderDetail coding. */
+        private String instructionsSystem = "http://cce.openphc.org/CodeSystem/referral-instructions";
+        /** Code for the instructions orderDetail coding. */
+        private String instructionsCode = "referral-instructions";
+        /** Display for the instructions orderDetail coding. */
+        private String instructionsDisplay = "Referral Instructions";
     }
 }
