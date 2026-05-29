@@ -45,6 +45,7 @@ public class FhirPollerService {
     private final PatientReferenceRewriter patientReferenceRewriter;
     private final OrderRevisionResolver orderRevisionResolver;
     private final OrderIdentifierEnricher orderIdentifierEnricher;
+    private final ReferralResponseOrderEnricher referralResponseOrderEnricher;
     private final PractitionerReferenceEnricher practitionerReferenceEnricher;
     private final FacilityReferenceEnricher facilityReferenceEnricher;
     private final MeterRegistry meterRegistry;
@@ -58,6 +59,7 @@ public class FhirPollerService {
                              PatientReferenceRewriter patientReferenceRewriter,
                              OrderRevisionResolver orderRevisionResolver,
                              OrderIdentifierEnricher orderIdentifierEnricher,
+                             ReferralResponseOrderEnricher referralResponseOrderEnricher,
                              PractitionerReferenceEnricher practitionerReferenceEnricher,
                              FacilityReferenceEnricher facilityReferenceEnricher,
                              MeterRegistry meterRegistry) {
@@ -70,6 +72,7 @@ public class FhirPollerService {
         this.patientReferenceRewriter = patientReferenceRewriter;
         this.orderRevisionResolver = orderRevisionResolver;
         this.orderIdentifierEnricher = orderIdentifierEnricher;
+        this.referralResponseOrderEnricher = referralResponseOrderEnricher;
         this.practitionerReferenceEnricher = practitionerReferenceEnricher;
         this.facilityReferenceEnricher = facilityReferenceEnricher;
         this.meterRegistry = meterRegistry;
@@ -194,6 +197,7 @@ public class FhirPollerService {
             }
             IBaseResource enriched = rr.resource() != null ? rr.resource() : resource;
             orderIdentifierEnricher.enrich(enriched);
+            referralResponseOrderEnricher.enrich(enriched);
             practitionerReferenceEnricher.enrich(enriched);
             facilityReferenceEnricher.enrich(enriched);
             String json = parser.encodeResourceToString(enriched);
