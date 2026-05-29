@@ -195,5 +195,11 @@ public class EmitterProperties {
         private String instructionsCode = "referral-instructions";
         /** Display for the instructions orderDetail coding. */
         private String instructionsDisplay = "Referral Instructions";
+        /**
+         * OpenMRS encounter type UUID for "Referral Response". Used to resolve the
+         * fulfilling practitioner from a sibling encounter under the same visit when
+         * the ServiceRequest's linked encounter has no participant.
+         */
+        private String responseEncounterTypeUuid = "479e4805-90d9-44f5-b252-333d8a687e52";
     }
 }

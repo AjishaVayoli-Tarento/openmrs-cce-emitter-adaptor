@@ -45,6 +45,8 @@ public class FhirPollerService {
     private final PatientReferenceRewriter patientReferenceRewriter;
     private final OrderRevisionResolver orderRevisionResolver;
     private final OrderIdentifierEnricher orderIdentifierEnricher;
+    private final PractitionerReferenceEnricher practitionerReferenceEnricher;
+    private final FacilityReferenceEnricher facilityReferenceEnricher;
     private final MeterRegistry meterRegistry;
 
     public FhirPollerService(EmitterProperties properties,
@@ -56,6 +58,8 @@ public class FhirPollerService {
                              PatientReferenceRewriter patientReferenceRewriter,
                              OrderRevisionResolver orderRevisionResolver,
                              OrderIdentifierEnricher orderIdentifierEnricher,
+                             PractitionerReferenceEnricher practitionerReferenceEnricher,
+                             FacilityReferenceEnricher facilityReferenceEnricher,
                              MeterRegistry meterRegistry) {
         this.properties = properties;
         this.fhirContext = fhirContext;
@@ -66,6 +70,8 @@ public class FhirPollerService {
         this.patientReferenceRewriter = patientReferenceRewriter;
         this.orderRevisionResolver = orderRevisionResolver;
         this.orderIdentifierEnricher = orderIdentifierEnricher;
+        this.practitionerReferenceEnricher = practitionerReferenceEnricher;
+        this.facilityReferenceEnricher = facilityReferenceEnricher;
         this.meterRegistry = meterRegistry;
     }
 
@@ -188,6 +194,8 @@ public class FhirPollerService {
             }
             IBaseResource enriched = rr.resource() != null ? rr.resource() : resource;
             orderIdentifierEnricher.enrich(enriched);
+            practitionerReferenceEnricher.enrich(enriched);
+            facilityReferenceEnricher.enrich(enriched);
             String json = parser.encodeResourceToString(enriched);
             ForwardResult result = forwardingEngine.forward(json, resourceType, resourceId);
             return result.isSuccess();

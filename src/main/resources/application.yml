@@ -75,6 +75,7 @@ emitter:
       instructions-system: "${REFERRAL_RESPONSE_INSTRUCTIONS_SYSTEM:http://cce.openphc.org/CodeSystem/referral-instructions}"
       instructions-code: "${REFERRAL_RESPONSE_INSTRUCTIONS_CODE:referral-instructions}"
       instructions-display: "${REFERRAL_RESPONSE_INSTRUCTIONS_DISPLAY:Referral Instructions}"
+      response-encounter-type-uuid: "${REFERRAL_RESPONSE_ENCOUNTER_TYPE_UUID:479e4805-90d9-44f5-b252-333d8a687e52}"
 
 logging:
   level:
